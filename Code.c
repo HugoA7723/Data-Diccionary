@@ -31,30 +31,33 @@ void imprimirAtributos(FILE *Diccionario, long ListAtrubutos)
 	ATTRIBUTE atributo;
 	long direccion;
 	
-	printf("--Atributos\n");
+	printf("Atributos\n");
+
 	fseek(Diccionario, ListAtrubutos, SEEK_SET);
 	fread(&direccion, sizeof(long), 1, Diccionario);
+
 	if (direccion == -1 || ListAtrubutos == -1)
-		printf("---No hay Atributos\n");
-	else
-		while (direccion != -1)
 	{
+		printf("---No hay Atributos\n");
+	}
+	else
+	{
+		while (direccion != -1)
+		{
 			fseek(Diccionario, direccion, SEEK_SET);
-			
 			fread(&atributo.name, N, 1, Diccionario);
 			fread(&atributo.isPrimary, sizeof(bool), 1, Diccionario);
 			fread(&atributo.type, sizeof(long), 1, Diccionario);
 			fread(&atributo.size, sizeof(long), 1, Diccionario);
 			fread(&direccion, sizeof(long), 1, Diccionario);
 			printf("  +%s\n", atributo.name);
+		}
 	}
 }
 
 long appendAttribute(FILE *dataDictionary, ATTRIBUTE newAttribute)
 {
-	
 	fseek(dataDictionary, 0, SEEK_END);
-	// Esta es la direcciÃ³n de la nueva Entidad
 	long entityDirection = ftell(dataDictionary);
 	
 	fwrite(newAttribute.name, 50, 1, dataDictionary);
@@ -75,23 +78,20 @@ void reorderAttributes(FILE *dataDictionary, long currentAttributePointer, const
 	
 	if (currentAttributeDirection == -1L)
 	{
-		// No hay mÃ¡s entidades para modificar/mover. Establezca el puntero actual en una nueva direcciÃ³n para la entidad.
 		fseek(dataDictionary, currentAttributePointer, SEEK_SET);
 		fwrite(&newAttributeDirection, sizeof(long), 1, dataDictionary);
 	}
 	else
 	{
 		char currentAttributeName[50];
-		// long nextEntityDirection;
 		long nextHeaderPointer;
 		bool sigClavePrim;
 		
-		// Vaya a la ubicaciÃ³n de la entidad y lea sus datos
 		fseek(dataDictionary, currentAttributeDirection, SEEK_SET);
-		// Lea el nombre de la entidad en la posiciÃ³n actual
 		fread(&currentAttributeName, sizeof(char), 50, dataDictionary);
 		nextHeaderPointer = ftell(dataDictionary) + sizeof(bool) + (sizeof(long) * 2);
 		fread(&sigClavePrim, sizeof(bool), 1, dataDictionary);
+
 		if (clavePrim)
 		{
 			if (sigClavePrim == clavePrim)
@@ -99,14 +99,13 @@ void reorderAttributes(FILE *dataDictionary, long currentAttributePointer, const
 				printf("Ya existe esa clave!\n");
 				return;
 			}
-			// Reasignar el primer puntero
 			fseek(dataDictionary, currentAttributePointer, SEEK_SET);
 			fwrite(&newAttributeDirection, sizeof(long), 1, dataDictionary);
-			// Asigna al puntero una nueva entidad.
 			fseek(dataDictionary, newAttributeDirection + 50 + sizeof(bool) + (sizeof(long) * 2), SEEK_SET);
 			fwrite(&currentAttributeDirection, sizeof(long), 1, dataDictionary);
 			return;
 		}
+
 		if (strcmp(currentAttributeName, newAttributeName) == 0)
 		{
 			printf("Ya existe un atributo con el mismo nombre, favor de seleccionar otro.\n");
@@ -114,10 +113,8 @@ void reorderAttributes(FILE *dataDictionary, long currentAttributePointer, const
 		}
 		else
 		{
-			// Compare los nombres de las entidades para determinar si la entidad actual debe estar antes de la nueva o no.
 			if (strcmp(currentAttributeName, newAttributeName) < 0 || sigClavePrim || clavePrim)
 			{
-				// La entidad actual es anterior a la nueva
 				reorderAttributes(dataDictionary, nextHeaderPointer, newAttributeName, newAttributeDirection, 0);
 			}
 			else
@@ -173,6 +170,9 @@ void CreateAttribute(FILE *dataDictionary, Entidades currentEntity)
 	case 5:
 		newAttribute.size = sizeof(bool);
 		break;
+	default:
+		printf("Tipo no valido, favor de volver a intentarlo.\n");
+		break;
 	}
 	
 	newAttribute.nextAtribute = vacio;
@@ -190,31 +190,27 @@ int eliminaAtributo(FILE *Diccionario, char nom[N], long cab)
 	ATTRIBUTE atributo;
 	long ant, ptr, ptrdir;
 	
-	// Leer la cabecera (direcciÃ³n de la cabeza de la lista)
 	fseek(Diccionario, cab, SEEK_SET);
 	fread(&ptr, sizeof(long), 1, Diccionario);
 	if (ptr == -1)
 	{
 		fclose(Diccionario);
-		return 0; // Lista vacÃ­a
+		return 0; 
 	}
-	// Desplazarse a la primera entidad
 	fseek(Diccionario, ptr, SEEK_SET);
 	fread(atributo.name, N, 1, Diccionario);
 	fread(&atributo.isPrimary, sizeof(bool), 1, Diccionario);
 	fread(&atributo.type, sizeof(long), 1, Diccionario);
 	fread(&atributo.size, sizeof(long), 1, Diccionario);
-	ptrdir = ftell(Diccionario);               // DirecciÃ³n de la primera entidad
-	fread(&ptr, sizeof(long), 1, Diccionario); // Obtener el puntero 'sig' de la primera entidad
-	// Si la entidad a eliminar es la primera (cabeza de la lista)
+	ptrdir = ftell(Diccionario);               
+	fread(&ptr, sizeof(long), 1, Diccionario); 
 	if (strcmp(atributo.name, nom) == 0)
 	{
-		// Actualizamos la cabeza de la lista para que apunte a la siguiente entidad
 		fseek(Diccionario, cab, SEEK_SET);
-		fwrite(&ptr, sizeof(long), 1, Diccionario); // Nueva cabeza de la lista
-		return 1;                                   // Eliminada con Ã©xito
+		fwrite(&ptr, sizeof(long), 1, Diccionario); 
+		return 1;                                   
 	}
-	// Buscar la entidad a eliminar en el resto de la lista
+
 	while (ptr != -1 && strcmp(atributo.name, nom) != 0)
 	{
 		ant = ptrdir;
@@ -223,18 +219,19 @@ int eliminaAtributo(FILE *Diccionario, char nom[N], long cab)
 		fread(&atributo.isPrimary, sizeof(bool), 1, Diccionario);
 		fread(&atributo.type, sizeof(long), 1, Diccionario);
 		fread(&atributo.size, sizeof(long), 1, Diccionario);
-		ptrdir = ftell(Diccionario);               // DirecciÃ³n de la primera entidad
-		fread(&ptr, sizeof(long), 1, Diccionario); // Obtener el puntero 'sig' de la primera entidad
+		ptrdir = ftell(Diccionario);               
+		fread(&ptr, sizeof(long), 1, Diccionario); 
 	}
-	// Si no se encontrÃ³ la entidad, devolvemos 0
+
 	if (ptr == -1 && strcmp(atributo.name, nom) != 0)
 	{
 		return 0;
 	}
-	// Ahora eliminamos la entidad: Actualizamos el puntero 'sig' de la entidad anterior
-	fseek(Diccionario, ant, SEEK_SET);          // Desplazarse a la entidad anterior
-	fwrite(&ptr, sizeof(long), 1, Diccionario); // Actualizamos el puntero 'sig' para omitir la entidad eliminada
-	return 1; // EliminaciÃ³n exitosa
+
+	fseek(Diccionario, ant, SEEK_SET);          
+	
+	fwrite(&ptr, sizeof(long), 1, Diccionario); 
+	return 1;
 }
 
 void modificaAtributo(FILE *dataDictionary, char nom[50], long cab)
@@ -317,6 +314,9 @@ void menuAtributos(char *diccionario, Entidades entidad)
 		fclose(Diccionario);
 		EntidadesMenu(diccionario);
 		break;
+	default:
+		printf("Opcion no valida, favor de volver a intentar.\n");
+		break;
 	}
 	
 	fclose(Diccionario);
@@ -332,52 +332,47 @@ int elimina(FILE *Diccionario, char nom[N])
 	Entidades entidad;
 	long ant, ptr, ptrdir;
 	
-	// Leer la cabecera (direcciÃ³n de la cabeza de la lista)
 	fread(&ptr, sizeof(long), 1, Diccionario);
 	if (ptr == -1)
 	{
-		return 0; // Lista vacÃ­a
+		return 0;
 	}
 	
-	// Desplazarse a la primera entidad
 	fseek(Diccionario, ptr, SEEK_SET);
 	fread(entidad.nom, N, 1, Diccionario);
 	fread(&entidad.listDatos, sizeof(long), 1, Diccionario);
 	fread(&entidad.ListAtrubutos, sizeof(long), 1, Diccionario);
-	ptrdir = ftell(Diccionario);               // DirecciÃ³n de la primera entidad
-	fread(&ptr, sizeof(long), 1, Diccionario); // Obtener el puntero 'sig' de la primera entidad
+	ptrdir = ftell(Diccionario);            
+	fread(&ptr, sizeof(long), 1, Diccionario);
 	
-	// Si la entidad a eliminar es la primera (cabeza de la lista)
 	if (strcmp(entidad.nom, nom) == 0)
 	{
-		// Actualizamos la cabeza de la lista para que apunte a la siguiente entidad
 		rewind(Diccionario);
-		fwrite(&ptr, sizeof(long), 1, Diccionario); // Nueva cabeza de la lista
+		fwrite(&ptr, sizeof(long), 1, Diccionario);
 		
-		return 1; // Eliminada con Ã©xito
+		return 1;
 	}
 	
-	// Buscar la entidad a eliminar en el resto de la lista
 	while (ptr != -1 && strcmp(entidad.nom, nom) != 0)
 	{
 		ant = ptrdir;
-		fseek(Diccionario, ptr, SEEK_SET); // Desplazarse a la entidad actual
+		fseek(Diccionario, ptr, SEEK_SET);
 		fread(entidad.nom, N, 1, Diccionario);
 		fread(&entidad.listDatos, sizeof(long), 1, Diccionario);
 		fread(&entidad.ListAtrubutos, sizeof(long), 1, Diccionario);
-		ptrdir = ftell(Diccionario);               // DirecciÃ³n de la entidad actual
-		fread(&ptr, sizeof(long), 1, Diccionario); // Leer el siguiente puntero
+		ptrdir = ftell(Diccionario);
+		fread(&ptr, sizeof(long), 1, Diccionario);
 	}
 	
-	// Si no se encontrÃ³ la entidad, devolvemos 0
 	if (ptr == -1 && strcmp(entidad.nom, nom) != 0)
+	{
 		return 0;
+	}
 	
-	// Ahora eliminamos la entidad: Actualizamos el puntero 'sig' de la entidad anterior
-	fseek(Diccionario, ant, SEEK_SET);          // Desplazarse a la entidad anterior
-	fwrite(&ptr, sizeof(long), 1, Diccionario); // Actualizamos el puntero 'sig' para omitir la entidad eliminada
+	fseek(Diccionario, ant, SEEK_SET);         
+	fwrite(&ptr, sizeof(long), 1, Diccionario);
 	
-	return 1; // EliminaciÃ³n exitosa
+	return 1; 
 }
 
 void OrdenarEntidad(FILE *Diccionario, long EntidadActual, const char *nuevoNombreEntidad, long nuevaDirEntidad)
@@ -389,25 +384,19 @@ void OrdenarEntidad(FILE *Diccionario, long EntidadActual, const char *nuevoNomb
 	
 	if (DirEntidad == -1L)
 	{
-		// No hay mÃ¡s entidades para iterar. Establezca el puntero actual en la nueva direcciÃ³n de la entidad
 		fseek(Diccionario, EntidadActual, SEEK_SET);
 		fwrite(&nuevaDirEntidad, sizeof(long), 1, Diccionario);
 	}
 	else
 	{
 		char currentEntityName[50];
-		// long nextEntityDirection;
 		long nextHeaderPointer;
 		
-		// Vaya a la ubicaciÃ³n de la entidad y lea sus datos
 		fseek(Diccionario, DirEntidad, SEEK_SET);
-		// Lea el nombre de la entidad en la posiciÃ³n actual
 		fread(&currentEntityName, sizeof(char), 50, Diccionario);
 		nextHeaderPointer = ftell(Diccionario) + (sizeof(long) * 2);
-		// Compare los nombres de las entidades para determinar si la entidad actual debe estar antes de la nueva o no
 		if (strcmp(currentEntityName, nuevoNombreEntidad) < 0)
 		{
-			// La entidad actual es anterior a la nueva
 			OrdenarEntidad(Diccionario, nextHeaderPointer, nuevoNombreEntidad, nuevaDirEntidad);
 		}
 		else
@@ -418,10 +407,8 @@ void OrdenarEntidad(FILE *Diccionario, long EntidadActual, const char *nuevoNomb
 			}
 			else
 			{
-				// Reasignar el primer puntero
 				fseek(Diccionario, EntidadActual, SEEK_SET);
 				fwrite(&nuevaDirEntidad, sizeof(long), 1, Diccionario);
-				// Reassign new entity pointer
 				fseek(Diccionario, nuevaDirEntidad + 50 + (sizeof(long) * 2), SEEK_SET);
 				fwrite(&DirEntidad, sizeof(long), 1, Diccionario);
 			}
@@ -431,14 +418,13 @@ void OrdenarEntidad(FILE *Diccionario, long EntidadActual, const char *nuevoNomb
 
 long AgregarEntidad(FILE *Diccionario, Entidades nuevaEntidad)
 {
-	fseek(Diccionario, 0, SEEK_END);
-	// esta es la direcciÃ³n de la nueva Entidad
-	long DirEntidad = ftell(Diccionario);
-	fwrite(nuevaEntidad.nom, 50, 1, Diccionario);
-	fwrite(&nuevaEntidad.listDatos, sizeof(long), 1, Diccionario);
-	fwrite(&nuevaEntidad.ListAtrubutos, sizeof(long), 1, Diccionario);
-	fwrite(&nuevaEntidad.sig, sizeof(long), 1, Diccionario);
-	return DirEntidad;
+    fseek(Diccionario, 0, SEEK_END);
+    long DirEntidad = ftell(Diccionario);
+    fwrite(nuevaEntidad.nom, 50, 1, Diccionario);
+    fwrite(&nuevaEntidad.listDatos, sizeof(long), 1, Diccionario);
+    fwrite(&nuevaEntidad.ListAtrubutos, sizeof(long), 1, Diccionario);
+    fwrite(&nuevaEntidad.sig, sizeof(long), 1, Diccionario); // <-- aquí
+    return DirEntidad;
 }
 
 void imprimirDatos(FILE *Diccionario, long LDatos, long LAtributos)
@@ -466,17 +452,13 @@ void imprimirDatos(FILE *Diccionario, long LDatos, long LAtributos)
 			LDatos = sig;
 			while (ListAtributos != -1)
 			{
-				// Moverse hacia la lista de atributos
 				fseek(Diccionario, ListAtributos, SEEK_SET);
-				// Leer atributo
 				fread(atributo.name, N, 1, Diccionario);
 				fread(&atributo.isPrimary, sizeof(bool), 1, Diccionario);
 				fread(&atributo.type, sizeof(long), 1, Diccionario);
 				fread(&atributo.size, sizeof(long), 1, Diccionario);
-				// apuntador al siguiente atributo
 				fread(&ListAtributos, sizeof(long), 1, Diccionario);
 				
-				// moverse al dato
 				fseek(Diccionario, LDatos, SEEK_SET);
 				switch (atributo.type)
 				{
@@ -517,54 +499,40 @@ void imprimir(FILE *Diccionario)
     Entidades Entidad;
     long direccion;
 
-    // Reiniciar el puntero del archivo al inicio
     rewind(Diccionario);
 
-    // Leer la dirección de la primera entidad desde la cabecera
     fread(&direccion, sizeof(long), 1, Diccionario);
 
-    // Verificar si la lista está vacía
     if (direccion == -1)
     {
         printf("No hay entidades.\n");
         return;
     }
 
-    // Recorrer todas las entidades
     while (direccion != -1)
     {
-        // Moverse a la dirección de la entidad actual
+        printf("DEBUG: direccion = %ld\n", direccion); // Depuración
+
         fseek(Diccionario, direccion, SEEK_SET);
 
-        // Leer los datos de la entidad
         fread(&Entidad.nom, sizeof(char), N, Diccionario);
         fread(&Entidad.listDatos, sizeof(long), 1, Diccionario);
         fread(&Entidad.ListAtrubutos, sizeof(long), 1, Diccionario);
-        fread(&direccion, sizeof(long), 1, Diccionario); // Leer la dirección de la siguiente entidad
+        fread(&Entidad.sig, sizeof(long), 1, Diccionario);
 
-        // Imprimir los datos de la entidad
+        printf("DEBUG: sig = %ld\n", Entidad.sig); // Depuración
+
         printf("\n-- %s --\n", Entidad.nom);
 
-        // Imprimir los atributos de la entidad
-        printf("-- Atributos --\n");
-        if (Entidad.ListAtrubutos == -1)
-        {
-            printf("--- No hay atributos.\n");
-        }
-        else
-        {
-            imprimirAtributos(Diccionario, Entidad.ListAtrubutos);
+        // ... resto del código ...
+
+        if (direccion == Entidad.sig) 
+		{
+            printf("Error: sig apunta a sí mismo. Rompiendo ciclo.\n");
+            break;
         }
 
-        // Imprimir los datos de la entidad
-        if (Entidad.listDatos == vacio)
-        {
-            printf("--- No hay datos.\n");
-        }
-        else
-        {
-            imprimirDatos(Diccionario, Entidad.listDatos, Entidad.ListAtrubutos);
-        }
+        direccion = Entidad.sig;
     }
 
     printf("\n");
@@ -575,24 +543,21 @@ Entidades findEntity(FILE *dataDictionary, char entityName[50])
 	Entidades currentEntity, aux;
 	
 	rewind(dataDictionary);
-	// leer cabesera
 	fread(&aux.sig, sizeof(long), 1, dataDictionary);
-	// moverse a la primera entidad
 	fseek(dataDictionary, aux.sig, SEEK_SET);
-	// leer direccion y datos de la primera entidad
+
 	fread(&currentEntity.nom, sizeof(char), 50, dataDictionary);
 	currentEntity.listDatos = ftell(dataDictionary);
 	fread(&aux.listDatos, sizeof(long), 1, dataDictionary);
 	currentEntity.ListAtrubutos = ftell(dataDictionary);
+
 	fread(&aux.ListAtrubutos, sizeof(long), 1, dataDictionary);
 	currentEntity.sig = ftell(dataDictionary);
 	fread(&aux.sig, sizeof(long), 1, dataDictionary);
 	
 	while (aux.sig != -1 && (strcmp(currentEntity.nom, entityName)) != 0)
 	{
-		// mover a la siguiente entidad
 		fseek(dataDictionary, aux.sig, SEEK_SET);
-		// leer direccion y datos de la primera entidad
 		fread(&currentEntity.nom, sizeof(char), 50, dataDictionary);
 		currentEntity.listDatos = ftell(dataDictionary);
 		fread(&aux.listDatos, sizeof(long), 1, dataDictionary);
@@ -603,7 +568,9 @@ Entidades findEntity(FILE *dataDictionary, char entityName[50])
 	}
 	
 	if (aux.sig == -1 && (strcmp(currentEntity.nom, entityName)) != 0)
+	{
 		currentEntity.sig = 0;
+	}
 	
 	return currentEntity;
 }
@@ -614,7 +581,6 @@ void modificarEntidad(FILE *Diccionario, char nom[50])
 	long DirEntidad;
 	Entidades ptr, nuevaEntidad, aux;
 	
-	// buscar el nodo
 	ptr = findEntity(Diccionario, nom);
 	if (ptr.sig == 0)
 	{
@@ -622,7 +588,6 @@ void modificarEntidad(FILE *Diccionario, char nom[50])
 		return;
 	}
 	
-	// eliminar entidad
 	elimina(Diccionario, nom);
 	
 	printf("Nuevo nombre: ");
@@ -630,7 +595,7 @@ void modificarEntidad(FILE *Diccionario, char nom[50])
 	fseek(Diccionario, ptr.listDatos, SEEK_SET);
 	fread(&nuevaEntidad.listDatos, sizeof(long), 1, Diccionario);
 	fread(&nuevaEntidad.ListAtrubutos, sizeof(long), 1, Diccionario);
-	nuevaEntidad.sig = vacio;
+	nuevaEntidad.sig = vacio; // vacio es -1
 	
 	aux = findEntity(Diccionario, nuevaEntidad.nom);
 	while (aux.sig != 0)
@@ -674,17 +639,13 @@ void AgregarDato(FILE *Diccionario, long nuevoDato, long LDatos, long LAtributos
 			ListAtributos = LAtributos;
 			while (ListAtributos != -1)
 			{
-				// Moverse hacia la lista de atributos
 				fseek(Diccionario, ListAtributos, SEEK_SET);
-				// Leer atributo
 				fread(atributo.name, N, 1, Diccionario);
 				fread(&atributo.isPrimary, sizeof(bool), 1, Diccionario);
 				fread(&atributo.type, sizeof(long), 1, Diccionario);
 				fread(&atributo.size, sizeof(long), 1, Diccionario);
-				// Apuntador al siguiente atributo
 				fread(&ListAtributos, sizeof(long), 1, Diccionario);
 				
-				// Moverse al dato
 				fseek(Diccionario, sig, SEEK_SET);
 				switch (atributo.type)
 				{
@@ -713,7 +674,6 @@ void AgregarDato(FILE *Diccionario, long nuevoDato, long LDatos, long LAtributos
 			fin = ftell(Diccionario);
 			fread(&sig, sizeof(long), 1, Diccionario);
 		}
-		// Cuando llegue al final, escribe el siguiente
 		fseek(Diccionario, fin, SEEK_SET);
 		fwrite(&nuevoDato, sizeof(long), 1, Diccionario);
 	}
@@ -746,14 +706,11 @@ void insertarDatos(FILE *Diccionario, Entidades entidad)
 	
 	while (ListAtributos != -1)
 	{
-		// Moverse hacia la lista de atributos
 		fseek(Diccionario, ListAtributos, SEEK_SET);
-		// Leer atributo
 		fread(atributo.name, N, 1, Diccionario);
 		fread(&atributo.isPrimary, sizeof(bool), 1, Diccionario);
 		fread(&atributo.type, sizeof(long), 1, Diccionario);
 		fread(&atributo.size, sizeof(long), 1, Diccionario);
-		// apuntador al siguiente atributo
 		fread(&ListAtributos, sizeof(long), 1, Diccionario);
 		
 		printf("%s: ", atributo.name);
@@ -785,9 +742,13 @@ void insertarDatos(FILE *Diccionario, Entidades entidad)
 				printf("\n 1)Verdadero \n 0)Falso \n opcion: ");
 				scanf(" %d", &datoint);
 			} while (datoint < 0 || datoint > 1);
+
 			datobool = datoint;
 			fseek(Diccionario, 0, SEEK_END);
 			fwrite(&datobool, sizeof(bool), 1, Diccionario);
+			break;
+		default:
+			printf("Tipo no valido, favor de volver a intentarlo.\n");
 			break;
 		}
 		pos = ftell(Diccionario);
@@ -817,12 +778,10 @@ void EntidadesMenu(char diccionario[N])
 	case 2:
 		printf("Nombre: ");
 		scanf("%s", nuevaEntidad.nom);
-		nuevaEntidad.ListAtrubutos = vacio;
-		nuevaEntidad.listDatos = vacio;
 		nuevaEntidad.sig = vacio;
-		// Agregar entidad al final del archibo y guardar su posision
+		nuevaEntidad.listDatos = vacio;
+		nuevaEntidad.ListAtrubutos = vacio;
 		DirEntidad = AgregarEntidad(Diccionario, nuevaEntidad);
-		// Ordenar la entidad agregada
 		OrdenarEntidad(Diccionario, 0, nuevaEntidad.nom, DirEntidad);
 		
 		break;
@@ -830,9 +789,13 @@ void EntidadesMenu(char diccionario[N])
 		printf("Nombre: ");
 		scanf("%s", nom);
 		if (elimina(Diccionario, nom))
+		{
 			printf("Eliminado correctamente!\n");
+		}
 		else
+		{
 			printf("No fue posible eliminar, favor de volver a intentar\n");
+		}
 		break;
 	case 4:
 		printf("Nombre: ");
@@ -880,6 +843,9 @@ void EntidadesMenu(char diccionario[N])
 		printf("Saliendo del Archivo...................\n\n");
 		menu();
 		break;
+	default:
+		printf("Opcion no valida, favor de volver a intentar.\n");
+		break;
 	}
 	fclose(Diccionario);
 	EntidadesMenu(diccionario);
@@ -906,8 +872,10 @@ void menu()
 			menu();
 		}
 		else
-			  // inicializar diccionario
-			  fwrite(&num, sizeof(long), 1, diccionario);
+		{
+			long num = vacio;
+			fwrite(&num, sizeof(long), 1, diccionario);
+		}
 		break;
 	case 2:
 		printf("Nombre del diccionario: ");
@@ -940,74 +908,60 @@ int main()
 
 int removeAttribute(FILE *dataDictionary, long currentAttributePointer, char attributeName[])
 {
-long currentAttributeDirection = -1;
-fseek(dataDictionary, currentAttributePointer, SEEK_SET);
-fread(&currentAttributeDirection, sizeof(currentAttributeDirection), 1, dataDictionary);
+	long currentAttributeDirection = -1;
+	fseek(dataDictionary, currentAttributePointer, SEEK_SET);
+	fread(&currentAttributeDirection, sizeof(currentAttributeDirection), 1, dataDictionary);
 
-if(currentAttributeDirection == -1)
-return 0;
-else{
-ATTRIBUTE aux;
-long nextAttributePointer;
-fseek(dataDictionary, currentAttributeDirection, SEEK_SET);
-nextAttributePointer = ftell(dataDictionary) - sizeof(long);
+	if(currentAttributeDirection == -1)
+	{
+		return 0;
+	}
+	else{
+	ATTRIBUTE aux;
+	long nextAttributePointer;
+	fseek(dataDictionary, currentAttributeDirection, SEEK_SET);
+	nextAttributePointer = ftell(dataDictionary) - sizeof(long);
 
-char currentAttributeName[50];
-fseek(dataDictionary, currentAttributeDirection, SEEK_SET);
-fread(currentAttributeName, sizeof(char), 50, dataDictionary);
+	char currentAttributeName[50];
+	fseek(dataDictionary, currentAttributeDirection, SEEK_SET);
+	fread(currentAttributeName, sizeof(char), 50, dataDictionary);
 
-if(strcmp(currentAttributeName, attributeName) == 0){
-fseek(dataDictionary, currentAttributePointer, SEEK_SET);
-fwrite(&aux.nextAtribute, sizeof(long), 1, dataDictionary);
-return 1;
+	if(strcmp(currentAttributeName, attributeName) == 0)
+	{
+		fseek(dataDictionary, currentAttributePointer, SEEK_SET);
+		fwrite(&aux.nextAtribute, sizeof(long), 1, dataDictionary);
+		return 1;
+	}
+	else
+	{
+		return removeAttribute(dataDictionary, nextAttributePointer, attributeName);
+	}
+	}
 }
-else
-return removeAttribute(dataDictionary, nextAttributePointer, attributeName);
-}
-}
-
-
-
-
-/*Consideraciones:
-Solo puede existir un atributo primario por entidad, asÃ­ que tendremos
-que buscar entre todos, si existe en otro lado, no se debe agregar el nuevo
-No puede existir dos o mÃ¡s veces el mismo nombre de atributo en una entidad.
-Al momento de agregar datos, estos se ordenan por clave primaria
-Una vez que existen datos , LA ENTIDAD NO SE MODIFICA.
-
-
-
-El profesor quiere que las entidades sean todas MAYÃšSCULAS, ademÃ¡s de verificar que no estÃ©n
-repetidas las entidades.
-Primero el apuntador debe decir -1, si agregamos por ejemplo "salÃ³n", debemos colocar que diga 4, de 
-ahÃ­ se suman 50 espacios por el tamaÃ±o fijo que tiene "salÃ³n", siendo asÃ­ que el siguiente dato debe
-de escribirse en la posiciÃ³n 54
-*/
-
 
 ATTRIBUTE readAttribute(FILE *state, long address)
 {
-ATTRIBUTE attribute;
-fseek(state, address, SEEK_SET);
-fread(&attribute, sizeof(ATTRIBUTE), 1, state);
-return attribute;
+	ATTRIBUTE attribute;
+	fseek(state, address, SEEK_SET);
+	fread(&attribute, sizeof(ATTRIBUTE), 1, state);
+	return attribute;
 }
 
 
-size_t calculateTotalDataSize(Entidades entity, FILE *state){
-size_t totalSize = 0;
-ATTRIBUTE attribute;
-long attributePosition = entity.ListAtrubutos;
-
-while (attributePosition != vacio)
+size_t calculateTotalDataSize(Entidades entity, FILE *state)
 {
-attribute = readAttribute(state, attributePosition);
-totalSize += attribute.size;
-attributePosition = attribute.nextAtribute;
-}
+	size_t totalSize = 0;
+	ATTRIBUTE attribute;
+	long attributePosition = entity.ListAtrubutos;
 
-return totalSize;
+	while (attributePosition != vacio)
+	{
+		attribute = readAttribute(state, attributePosition);
+		totalSize += attribute.size;
+		attributePosition = attribute.nextAtribute;
+	}
+
+	return totalSize;
 }
 
 int captureDataRecord(Entidades entity, FILE *state, char *dataBuffer)
@@ -1022,4 +976,3 @@ int captureDataRecord(Entidades entity, FILE *state, char *dataBuffer)
     }
 
 }
-
