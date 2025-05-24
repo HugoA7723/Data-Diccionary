@@ -71,114 +71,108 @@ long appendAttribute(FILE *dataDictionary, ATTRIBUTE newAttribute)
 
 void reorderAttributes(FILE *dataDictionary, long currentAttributePointer, const char *newAttributeName, long newAttributeDirection, bool clavePrim)
 {
-	long currentAttributeDirection = -1;
-	
-	fseek(dataDictionary, currentAttributePointer, SEEK_SET);
-	fread(&currentAttributeDirection, sizeof(currentAttributeDirection), 1, dataDictionary);
-	
-	if (currentAttributeDirection == -1L)
-	{
-		fseek(dataDictionary, currentAttributePointer, SEEK_SET);
-		fwrite(&newAttributeDirection, sizeof(long), 1, dataDictionary);
-	}
-	else
-	{
-		char currentAttributeName[50];
-		long nextHeaderPointer;
-		bool sigClavePrim;
-		
-		fseek(dataDictionary, currentAttributeDirection, SEEK_SET);
-		fread(&currentAttributeName, sizeof(char), 50, dataDictionary);
-		nextHeaderPointer = ftell(dataDictionary) + sizeof(bool) + (sizeof(long) * 2);
-		fread(&sigClavePrim, sizeof(bool), 1, dataDictionary);
+    long currentAttributeDirection = -1;
+    fseek(dataDictionary, currentAttributePointer, SEEK_SET);
+    fread(&currentAttributeDirection, sizeof(currentAttributeDirection), 1, dataDictionary);
 
-		if (clavePrim)
-		{
-			if (sigClavePrim == clavePrim)
-			{
-				printf("Ya existe esa clave!\n");
-				return;
-			}
-			fseek(dataDictionary, currentAttributePointer, SEEK_SET);
-			fwrite(&newAttributeDirection, sizeof(long), 1, dataDictionary);
-			fseek(dataDictionary, newAttributeDirection + 50 + sizeof(bool) + (sizeof(long) * 2), SEEK_SET);
-			fwrite(&currentAttributeDirection, sizeof(long), 1, dataDictionary);
-			return;
-		}
+    if (currentAttributeDirection == -1L) {
+        // Lista vacía, insertar al inicio
+        fseek(dataDictionary, currentAttributePointer, SEEK_SET);
+        fwrite(&newAttributeDirection, sizeof(long), 1, dataDictionary);
+    } else {
+        char currentAttributeName[50];
+        long nextPointer;
+        bool sigClavePrim;
 
-		if (strcmp(currentAttributeName, newAttributeName) == 0)
-		{
-			printf("Ya existe un atributo con el mismo nombre, favor de seleccionar otro.\n");
-			return;
-		}
-		else
-		{
-			if (strcmp(currentAttributeName, newAttributeName) < 0 || sigClavePrim || clavePrim)
-			{
-				reorderAttributes(dataDictionary, nextHeaderPointer, newAttributeName, newAttributeDirection, 0);
-			}
-			else
-			{
-				
-				fseek(dataDictionary, currentAttributePointer, SEEK_SET);
-				fwrite(&newAttributeDirection, sizeof(long), 1, dataDictionary);
-				
-				fseek(dataDictionary, newAttributeDirection + 50 + sizeof(bool) + (sizeof(long) * 2), SEEK_SET);
-				fwrite(&currentAttributeDirection, sizeof(long), 1, dataDictionary);
-			}
-		}
-	}
+        fseek(dataDictionary, currentAttributeDirection, SEEK_SET);
+        fread(&currentAttributeName, sizeof(char), 50, dataDictionary);
+        fread(&sigClavePrim, sizeof(bool), 1, dataDictionary);
+        fread(&nextPointer, sizeof(long), 1, dataDictionary); // Saltar type
+        fread(&nextPointer, sizeof(long), 1, dataDictionary); // Saltar size
+        fread(&nextPointer, sizeof(long), 1, dataDictionary); // Leer nextAtribute
+
+        // Orden alfabético (ignorando mayúsculas/minúsculas)
+        if (strcasecmp(newAttributeName, currentAttributeName) < 0) {
+            // Insertar antes del actual
+            fseek(dataDictionary, currentAttributePointer, SEEK_SET);
+            fwrite(&newAttributeDirection, sizeof(long), 1, dataDictionary);
+
+            fseek(dataDictionary, newAttributeDirection + 50 + sizeof(bool) + 2 * sizeof(long), SEEK_SET);
+            fwrite(&currentAttributeDirection, sizeof(long), 1, dataDictionary);
+        } else if (strcasecmp(newAttributeName, currentAttributeName) == 0) {
+            printf("Ya existe un atributo con el mismo nombre, favor de seleccionar otro.\n");
+            return;
+        } else {
+            // Continuar buscando
+            reorderAttributes(dataDictionary, currentAttributeDirection + 50 + sizeof(bool) + 2 * sizeof(long), newAttributeName, newAttributeDirection, clavePrim);
+        }
+    }
 }
 
 void CreateAttribute(FILE *dataDictionary, Entidades currentEntity)
 {
-	ATTRIBUTE newAttribute;
-	int tamanio, aux;
-	
-	printf("\nNombre del nuevo atributo: ");
-	
-	scanf("%s", newAttribute.name);
-	
-	printf("Es la clave primaria? 1)Si 0)No : ");
-	scanf("%d", &aux);
-	newAttribute.isPrimary = aux;
-	
-	printf("Tipo de atributo? 1)int 2)long 3)float 4)char 5)bool : ");
-	scanf("%d", &aux);
-	newAttribute.type = aux;
-	
-	switch (newAttribute.type)
-	{
-	case 1:
-		newAttribute.size = sizeof(int);
-		break;
-		
-	case 2:
-		newAttribute.size = sizeof(long);
-		break;
-		
-	case 3:
-		newAttribute.size = sizeof(float);
-		break;
-		
-	case 4:
-		printf("Cuantas letras tiene?: ");
-		scanf("%d", &tamanio);
-		newAttribute.size = sizeof(char) * tamanio;
-		break;
-		
-	case 5:
-		newAttribute.size = sizeof(bool);
-		break;
-	default:
-		printf("Tipo no valido, favor de volver a intentarlo.\n");
-		break;
-	}
-	
-	newAttribute.nextAtribute = vacio;
-	
-	long attributeDirection = appendAttribute(dataDictionary, newAttribute);
-	reorderAttributes(dataDictionary, currentEntity.ListAtrubutos, newAttribute.name, attributeDirection, newAttribute.isPrimary);
+    ATTRIBUTE newAttribute;
+    int tamanio, aux;
+
+    printf("\nNombre del nuevo atributo: ");
+    scanf("%s", newAttribute.name);
+
+    // Validar duplicados (ignorando mayúsculas/minúsculas)
+    long dir = 0;
+    char tempName[50];
+    fseek(dataDictionary, currentEntity.ListAtrubutos, SEEK_SET);
+    fread(&dir, sizeof(long), 1, dataDictionary);
+    while (dir != vacio) {
+        fseek(dataDictionary, dir, SEEK_SET);
+        fread(tempName, 50, 1, dataDictionary);
+        if (strcasecmp(tempName, newAttribute.name) == 0) {
+            printf("Ya existe un atributo con ese nombre (sin distinguir mayúsculas/minúsculas).\n");
+            return;
+        }
+        fseek(dataDictionary, sizeof(bool) + 3 * sizeof(long), SEEK_CUR); // Saltar isPrimary, type, size, nextAtribute
+        fread(&dir, sizeof(long), 1, dataDictionary);
+    }
+
+    printf("Es la clave primaria? 1)Si 0)No : ");
+    scanf("%d", &aux);
+    newAttribute.isPrimary = aux;
+
+    printf("Tipo de atributo? 1)int 2)long 3)float 4)char 5)bool : ");
+    scanf("%d", &aux);
+    newAttribute.type = aux;
+
+    switch (newAttribute.type)
+    {
+    case 1:
+        newAttribute.size = sizeof(int);
+        break;
+    case 2:
+        newAttribute.size = sizeof(long);
+        break;
+    case 3:
+        newAttribute.size = sizeof(float);
+        break;
+    case 4:
+        printf("¿Cuántos caracteres debe almacenar este campo?: ");
+        scanf("%d", &tamanio);
+        if (tamanio < 1 || tamanio > N) {
+            printf("Tamaño inválido, se usará 1.\n");
+            tamanio = 1;
+        }
+        newAttribute.size = sizeof(char) * tamanio;
+        break;
+    case 5:
+        newAttribute.size = sizeof(bool);
+        break;
+    default:
+        printf("Tipo no válido, favor de volver a intentarlo.\n");
+        break;
+    }
+
+    newAttribute.nextAtribute = vacio;
+
+    long attributeDirection = appendAttribute(dataDictionary, newAttribute);
+    reorderAttributes(dataDictionary, currentEntity.ListAtrubutos, newAttribute.name, attributeDirection, newAttribute.isPrimary);
 }
 
 int eliminaAtributo(FILE *Diccionario, char nom[N], long cab)
@@ -236,91 +230,166 @@ int eliminaAtributo(FILE *Diccionario, char nom[N], long cab)
 
 void modificaAtributo(FILE *dataDictionary, char nom[50], long cab)
 {
-	rewind(dataDictionary);
-	long DirAtributo;
-	ATTRIBUTE newAttribute;
-	
-	fseek(dataDictionary, cab, SEEK_SET);
-	fread(&DirAtributo, sizeof(long), 1, dataDictionary);
-	if (DirAtributo == -1)
-	{
-		printf("No hay Atributos");
-		return;
-	}
-	
-	fseek(dataDictionary, DirAtributo, SEEK_SET);
-	fread(newAttribute.name, 50, 1, dataDictionary);
-	fread(&newAttribute.isPrimary, sizeof(bool), 1, dataDictionary);
-	fread(&newAttribute.type, sizeof(long), 1, dataDictionary);
-	fread(&newAttribute.size, sizeof(long), 1, dataDictionary);
-	fread(&DirAtributo, sizeof(long), 1, dataDictionary);
-	while (DirAtributo != -1 && (strcmp(newAttribute.name, nom)) != 0)
-	{
-		fseek(dataDictionary, DirAtributo, SEEK_SET);
-		fread(newAttribute.name, 50, 1, dataDictionary);
-		fread(&newAttribute.isPrimary, sizeof(bool), 1, dataDictionary);
-		fread(&newAttribute.type, sizeof(long), 1, dataDictionary);
-		fread(&newAttribute.size, sizeof(long), 1, dataDictionary);
-		fread(&DirAtributo, sizeof(long), 1, dataDictionary);
-	}
-	newAttribute.nextAtribute = vacio;
-	if (DirAtributo == -1 && (strcmp(newAttribute.name, nom)) != 0)
-	{
-		printf("No existe el atributo, favor de volver a intentarlo.\n");
-		return;
-	}
-	eliminaAtributo(dataDictionary, nom, cab);
-	
-	printf("Nuevo nombre: ");
-	scanf("%s", newAttribute.name);
-	
-	DirAtributo = appendAttribute(dataDictionary, newAttribute);
-	reorderAttributes(dataDictionary, cab, newAttribute.name, DirAtributo, newAttribute.isPrimary);
+    rewind(dataDictionary);
+    long DirAtributo;
+    ATTRIBUTE newAttribute;
+    int aux, tamanio;
+
+    // Buscar el atributo a modificar
+    fseek(dataDictionary, cab, SEEK_SET);
+    fread(&DirAtributo, sizeof(long), 1, dataDictionary);
+    if (DirAtributo == -1)
+    {
+        printf("No hay Atributos\n");
+        return;
+    }
+
+    fseek(dataDictionary, DirAtributo, SEEK_SET);
+    fread(newAttribute.name, 50, 1, dataDictionary);
+    fread(&newAttribute.isPrimary, sizeof(bool), 1, dataDictionary);
+    fread(&newAttribute.type, sizeof(long), 1, dataDictionary);
+    fread(&newAttribute.size, sizeof(long), 1, dataDictionary);
+    fread(&DirAtributo, sizeof(long), 1, dataDictionary);
+
+    while (DirAtributo != -1 && (strcmp(newAttribute.name, nom)) != 0)
+    {
+        fseek(dataDictionary, DirAtributo, SEEK_SET);
+        fread(newAttribute.name, 50, 1, dataDictionary);
+        fread(&newAttribute.isPrimary, sizeof(bool), 1, dataDictionary);
+        fread(&newAttribute.type, sizeof(long), 1, dataDictionary);
+        fread(&newAttribute.size, sizeof(long), 1, dataDictionary);
+        fread(&DirAtributo, sizeof(long), 1, dataDictionary);
+    }
+    newAttribute.nextAtribute = vacio;
+    if (DirAtributo == -1 && (strcmp(newAttribute.name, nom)) != 0)
+    {
+        printf("No existe el atributo, favor de volver a intentarlo.\n");
+        return;
+    }
+
+    eliminaAtributo(dataDictionary, nom, cab);
+
+    // Pedir todos los datos del atributo nuevamente
+    printf("Nuevo nombre: ");
+    scanf("%s", newAttribute.name);
+
+    printf("Es la clave primaria? 1)Si 0)No : ");
+    scanf("%d", &aux);
+    newAttribute.isPrimary = aux;
+
+    printf("Tipo de atributo? 1)int 2)long 3)float 4)char 5)bool : ");
+    scanf("%d", &aux);
+    newAttribute.type = aux;
+
+    switch (newAttribute.type)
+    {
+    case 1:
+        newAttribute.size = sizeof(int);
+        break;
+    case 2:
+        newAttribute.size = sizeof(long);
+        break;
+    case 3:
+        newAttribute.size = sizeof(float);
+        break;
+    case 4:
+        printf("¿Cuántos caracteres debe almacenar este campo?: ");
+        scanf("%d", &tamanio);
+        if (tamanio < 1 || tamanio > N) {
+            printf("Tamaño inválido, se usará 1.\n");
+            tamanio = 1;
+        }
+        newAttribute.size = sizeof(char) * tamanio;
+        break;
+    case 5:
+        newAttribute.size = sizeof(bool);
+        break;
+    default:
+        printf("Tipo no válido, favor de volver a intentarlo.\n");
+        break;
+    }
+
+    long nuevaDirAtributo = appendAttribute(dataDictionary, newAttribute);
+    reorderAttributes(dataDictionary, cab, newAttribute.name, nuevaDirAtributo, newAttribute.isPrimary);
+
+    printf("Atributo modificado correctamente!\n");
 }
 
 void menuAtributos(char *diccionario, Entidades entidad)
 {
-	FILE *Diccionario = fopen(diccionario, "rb+");
-	int ops;
-	char nom[N];
-	
-	printf("----------Atributos de %s----------\n", entidad.nom);
-	printf(" 1)Imprimir Atributos\n 2)Nuevo Atributo\n 3)Eliminar Atributo\n 4)Modificar Atributo\n 5)Seleccionar atributo 0)salir\n Opcion: ");
-	scanf("%d", &ops);
-	
-	switch (ops)
-	{
-	case 1:
-		printf("--%s--\n", entidad.nom);
-		imprimirAtributos(Diccionario, entidad.ListAtrubutos);
-		break;
-	case 2:
-		CreateAttribute(Diccionario, entidad);
-		break;
-	case 3:
-		printf("Nombre: ");
-		scanf("%s", nom);
-		if (eliminaAtributo(Diccionario, nom, entidad.ListAtrubutos))
-			printf("Eliminado correctamente!\n");
-		else
-			printf("No fue posible eliminarlo, favor de volver a intentarlo.\n");
-		break;
-	case 4:
-		printf("Nombre: ");
-		scanf("%s", nom);
-		modificaAtributo(Diccionario, nom, entidad.ListAtrubutos);
-		break;
-	case 0:
-		fclose(Diccionario);
-		EntidadesMenu(diccionario);
-		break;
-	default:
-		printf("Opcion no valida, favor de volver a intentar.\n");
-		break;
-	}
-	
-	fclose(Diccionario);
-	menuAtributos(diccionario, entidad);
+    FILE *Diccionario = fopen(diccionario, "rb+");
+    int ops;
+    char nom[N];
+    
+    printf("----------Atributos de %s----------\n", entidad.nom);
+    printf(" 1)Imprimir Atributos\n 2)Nuevo Atributo\n 3)Eliminar Atributo\n 4)Modificar Atributo\n 5)Seleccionar atributo 0)salir\n Opcion: ");
+    scanf("%d", &ops);
+    
+    switch (ops)
+    {
+    case 1:
+        printf("--%s--\n", entidad.nom);
+        imprimirAtributos(Diccionario, entidad.ListAtrubutos);
+        break;
+    case 2:
+        CreateAttribute(Diccionario, entidad);
+        break;
+    case 3:
+        printf("Nombre: ");
+        scanf("%s", nom);
+        if (eliminaAtributo(Diccionario, nom, entidad.ListAtrubutos))
+            printf("Eliminado correctamente!\n");
+        else
+            printf("No fue posible eliminarlo, favor de volver a intentarlo.\n");
+        break;
+    case 4:
+        printf("Nombre: ");
+        scanf("%s", nom);
+        modificaAtributo(Diccionario, nom, entidad.ListAtrubutos);
+        break;
+    case 5:
+        printf("Nombre del atributo a seleccionar: ");
+        scanf("%s", nom);
+        {
+            long dir = 0;
+            char tempName[50];
+            fseek(Diccionario, entidad.ListAtrubutos, SEEK_SET);
+            fread(&dir, sizeof(long), 1, Diccionario);
+            int encontrado = 0;
+            ATTRIBUTE atributo;
+            while (dir != vacio) {
+                fseek(Diccionario, dir, SEEK_SET);
+                fread(atributo.name, 50, 1, Diccionario);
+                fread(&atributo.isPrimary, sizeof(bool), 1, Diccionario);
+                fread(&atributo.type, sizeof(long), 1, Diccionario);
+                fread(&atributo.size, sizeof(long), 1, Diccionario);
+                fread(&atributo.nextAtribute, sizeof(long), 1, Diccionario);
+                if (strcasecmp(atributo.name, nom) == 0) {
+                    printf("Atributo seleccionado:\n");
+                    printf("Nombre: %s\n", atributo.name);
+                    printf("Clave primaria: %s\n", atributo.isPrimary ? "Si" : "No");
+                    printf("Tipo: %ld\n", atributo.type);
+                    printf("Tamaño: %ld\n", atributo.size);
+                    encontrado = 1;
+                    break;
+                }
+                dir = atributo.nextAtribute;
+            }
+            if (!encontrado)
+                printf("No se encontró el atributo.\n");
+        }
+        break;
+    case 0:
+        fclose(Diccionario);
+        EntidadesMenu(diccionario);
+        return;
+    default:
+        printf("Opcion no valida, favor de volver a intentar.\n");
+        break;
+    }
+    
+    fclose(Diccionario);
+    menuAtributos(diccionario, entidad);
 }
 
 int elimina(FILE *Diccionario, char nom[N])
@@ -511,8 +580,6 @@ void imprimir(FILE *Diccionario)
 
     while (direccion != -1)
     {
-        printf("DEBUG: direccion = %ld\n", direccion); // Depuración
-
         fseek(Diccionario, direccion, SEEK_SET);
 
         fread(&Entidad.nom, sizeof(char), N, Diccionario);
@@ -520,14 +587,12 @@ void imprimir(FILE *Diccionario)
         fread(&Entidad.ListAtrubutos, sizeof(long), 1, Diccionario);
         fread(&Entidad.sig, sizeof(long), 1, Diccionario);
 
-        printf("DEBUG: sig = %ld\n", Entidad.sig); // Depuración
-
         printf("\n-- %s --\n", Entidad.nom);
 
         // ... resto del código ...
 
         if (direccion == Entidad.sig) 
-		{
+        {
             printf("Error: sig apunta a sí mismo. Rompiendo ciclo.\n");
             break;
         }
@@ -712,191 +777,243 @@ void insertarDatos(FILE *Diccionario, Entidades entidad)
 		fread(&atributo.type, sizeof(long), 1, Diccionario);
 		fread(&atributo.size, sizeof(long), 1, Diccionario);
 		fread(&ListAtributos, sizeof(long), 1, Diccionario);
-		
-		printf("%s: ", atributo.name);
-		switch (atributo.type)
-		{
-		case 1:
-			scanf(" %d", &datoint);
-			fseek(Diccionario, 0, SEEK_END);
-			fwrite(&datoint, sizeof(int), 1, Diccionario);
-			break;
-		case 2:
-			scanf(" %li", &datoLong);
-			fseek(Diccionario, 0, SEEK_END);
-			fwrite(&datoLong, sizeof(long), 1, Diccionario);
-			break;
-		case 3:
-			scanf(" %f", &datofloat);
-			fseek(Diccionario, 0, SEEK_END);
-			fwrite(&datofloat, atributo.size, 1, Diccionario);
-			break;
-		case 4:
-			scanf(" %s", datochar);
-			fseek(Diccionario, 0, SEEK_END);
-			fwrite(&datochar, sizeof(char), N, Diccionario);
-			break;
-		case 5:
-			do
-			{
-				printf("\n 1)Verdadero \n 0)Falso \n opcion: ");
-				scanf(" %d", &datoint);
-			} while (datoint < 0 || datoint > 1);
 
-			datobool = datoint;
-			fseek(Diccionario, 0, SEEK_END);
-			fwrite(&datobool, sizeof(bool), 1, Diccionario);
-			break;
-		default:
-			printf("Tipo no valido, favor de volver a intentarlo.\n");
-			break;
-		}
+		int valido = 0;
+		do {
+			printf("%s: ", atributo.name);
+			switch (atributo.type)
+			{
+			case 1: // int
+				if (scanf("%d", &datoint) == 1) {
+					valido = 1;
+					fseek(Diccionario, 0, SEEK_END);
+					fwrite(&datoint, sizeof(int), 1, Diccionario);
+				} else {
+					printf("Valor inválido. Debe ser un número entero.\n");
+					while(getchar() != '\n'); // Limpiar buffer
+				}
+				break;
+			case 2: // long
+				if (scanf("%li", &datoLong) == 1) {
+					valido = 1;
+					fseek(Diccionario, 0, SEEK_END);
+					fwrite(&datoLong, sizeof(long), 1, Diccionario);
+				} else {
+					printf("Valor inválido. Debe ser un número entero largo.\n");
+					while(getchar() != '\n');
+				}
+				break;
+			case 3: // float
+				if (scanf("%f", &datofloat) == 1) {
+					valido = 1;
+					fseek(Diccionario, 0, SEEK_END);
+					fwrite(&datofloat, atributo.size, 1, Diccionario);
+				} else {
+					printf("Valor inválido. Debe ser un número decimal.\n");
+					while(getchar() != '\n');
+				}
+				break;
+			case 4: // char[]
+				scanf("%s", datochar);
+				valido = 1;
+				fseek(Diccionario, 0, SEEK_END);
+				fwrite(&datochar, sizeof(char), N, Diccionario);
+				break;
+			case 5: // bool
+				do {
+					printf("\n 1)Verdadero \n 0)Falso \n opcion: ");
+					if (scanf("%d", &datoint) == 1 && (datoint == 0 || datoint == 1)) {
+						datobool = datoint;
+						valido = 1;
+						fseek(Diccionario, 0, SEEK_END);
+						fwrite(&datobool, sizeof(bool), 1, Diccionario);
+					} else {
+						printf("Valor inválido. Debe ser 1 o 0.\n");
+						while(getchar() != '\n');
+					}
+				} while (!valido);
+				break;
+			default:
+				printf("Tipo no valido, favor de volver a intentarlo.\n");
+				valido = 1; // Para salir del ciclo aunque el tipo sea inválido
+				break;
+			}
+		} while (!valido);
 		pos = ftell(Diccionario);
-		printf("pos: %li\n", pos);
 	}
 	sig = vacio;
 	fwrite(&sig, sizeof(long), 1, Diccionario);
 	AgregarDato(Diccionario, nuevoDato, entidad.listDatos, LAtributos);
 }
 
-void EntidadesMenu(char diccionario[N])
-{
-	FILE *Diccionario = fopen(diccionario, "rb+");
-	int ops;
-	long DirEntidad;
-	char nom[N];
-	Entidades nuevaEntidad, entidad;
-	
-	printf("----------ENTIDADES----------\n");
-	printf("1)Imprimir \n2)Nueva Entidad \n3)Eliminar Entidad \n4)Modificar entidad \n5)Seleccionar Entidad \n6)Agregar Datos \n0)salir \nOpcion: ");
-	scanf("%d", &ops);
-	switch (ops)
-	{
-	case 1:
-		imprimir(Diccionario);
-		break;
-	case 2:
-		printf("Nombre: ");
-		scanf("%s", nuevaEntidad.nom);
-		nuevaEntidad.sig = vacio;
-		nuevaEntidad.listDatos = vacio;
-		nuevaEntidad.ListAtrubutos = vacio;
-		DirEntidad = AgregarEntidad(Diccionario, nuevaEntidad);
-		OrdenarEntidad(Diccionario, 0, nuevaEntidad.nom, DirEntidad);
-		
-		break;
-	case 3:
-		printf("Nombre: ");
-		scanf("%s", nom);
-		if (elimina(Diccionario, nom))
-		{
-			printf("Eliminado correctamente!\n");
-		}
-		else
-		{
-			printf("No fue posible eliminar, favor de volver a intentar\n");
-		}
-		break;
-	case 4:
-		printf("Nombre: ");
-		scanf("%s", nom);
-		modificarEntidad(Diccionario, nom);
-		break;
-	case 5:
-		rewind(Diccionario);
-		printf("Nombre de la Entidad: ");
-		scanf("%s", nom);
-		entidad = findEntity(Diccionario, nom);
-		if (entidad.sig == 0)
-		{
-			printf("No se encontro La entidad!, favor de revisar.\n");
-			fclose(Diccionario);
-			EntidadesMenu(diccionario);
-		}
-		fseek(Diccionario, entidad.listDatos, SEEK_SET);
-		fread(&DirEntidad, sizeof(long), 1, Diccionario);
-		if (DirEntidad != vacio)
-		{
-			printf("Ya hay datos en esta entidad, no puedes modificar ni agregar mas atributos.\n");
-			fclose(Diccionario);
-			EntidadesMenu(diccionario);
-		}
-		printf("Entrando a los Atributos de la Entidad...........\n\n");
-		fclose(Diccionario);
-		menuAtributos(diccionario, entidad);
-		break;
-	case 6:
-		rewind(Diccionario);
-		printf("Nombre de la Entidad a la que se le quiere insertar los datos: ");
-		scanf("%s", nom);
-		entidad = findEntity(Diccionario, nom);
-		if (entidad.sig == 0)
-		{
-			printf("No se encontro La entidad!, favor de revisar.\n");
-			fclose(Diccionario);
-			EntidadesMenu(diccionario);
-		}
-		insertarDatos(Diccionario, entidad);
-		break;
-	case 0:
-		fclose(Diccionario);
-		printf("Saliendo del Archivo...................\n\n");
-		menu();
-		break;
-	default:
-		printf("Opcion no valida, favor de volver a intentar.\n");
-		break;
-	}
-	fclose(Diccionario);
-	EntidadesMenu(diccionario);
-}
-
 void menu()
 {
-	FILE *diccionario;
-	int ops;
-	long num = vacio;
-	char nom[N];
-	
-	printf("----------MENU----------\n");
-	printf("1)Crear Diccionario \n2)Abrir diccionario \n0)salir \nOpcion: ");
-	scanf("%d", &ops);
-	switch (ops)
-	{
-	case 1:
-		printf("Nombre del diccionario: ");
-		scanf("%s", nom);
-		if (!(diccionario = fopen(nom, "wb")))
-		{
-			printf("Archivo no encontrado\n");
-			menu();
-		}
-		else
-		{
-			long num = vacio;
-			fwrite(&num, sizeof(long), 1, diccionario);
-		}
-		break;
-	case 2:
-		printf("Nombre del diccionario: ");
-		scanf("%s", nom);
-		if (!(diccionario = fopen(nom, "rb+")))
-		{
-			printf("Archivo no encontrado\n");
-			menu();
-		}
-		break;
-	case 0:
-		printf("Cerrando programa... \n");
-		exit(0);
-		break;
-	default:
-		menu();
-		break;
-	}
-	fclose(diccionario);
-	printf("Abriendo Archivo.............\n\n");
-	EntidadesMenu(nom);
+    FILE *diccionario;
+    int ops;
+    long num = vacio;
+    char nom[N];
+
+    do {
+        printf("----------MENU----------\n");
+        printf("1)Crear Diccionario \n2)Abrir diccionario \n0)salir \nOpcion: ");
+        if (scanf("%d", &ops) != 1) {
+            while (getchar() != '\n'); // Limpiar buffer
+            ops = -1;
+        }
+        switch (ops)
+        {
+        case 1:
+            printf("Nombre del diccionario: ");
+            scanf("%s", nom);
+            if (!(diccionario = fopen(nom, "wb")))
+            {
+                printf("No se pudo crear el archivo\n");
+            }
+            else
+            {
+                long num = vacio;
+                fwrite(&num, sizeof(long), 1, diccionario);
+                fclose(diccionario);
+                printf("Abriendo Archivo.............\n\n");
+                EntidadesMenu(nom);
+            }
+            break;
+        case 2:
+            printf("Nombre del diccionario: ");
+            scanf("%s", nom);
+            if (!(diccionario = fopen(nom, "rb+")))
+            {
+                printf("Archivo no encontrado\n");
+            }
+            else
+            {
+                fclose(diccionario);
+                printf("Abriendo Archivo.............\n\n");
+                EntidadesMenu(nom);
+            }
+            break;
+        case 0:
+            printf("Cerrando programa... \n");
+            exit(0);
+            break;
+        default:
+            printf("Opcion no valida, favor de volver a intentar.\n");
+            break;
+        }
+    } while (ops != 0);
+}
+
+void EntidadesMenu(char diccionario[N])
+{
+    FILE *Diccionario;
+    int ops;
+    long DirEntidad;
+    char nom[N];
+    Entidades nuevaEntidad, entidad;
+
+    do {
+        Diccionario = fopen(diccionario, "rb+");
+        printf("----------ENTIDADES----------\n");
+        printf("1)Imprimir \n2)Nueva Entidad \n3)Eliminar Entidad \n4)Modificar entidad \n5)Seleccionar Entidad \n6)Agregar Datos \n0)salir \nOpcion: ");
+        if (scanf("%d", &ops) != 1) {
+            while (getchar() != '\n'); // Limpiar buffer
+            ops = -1;
+        }
+        switch (ops)
+        {
+        case 1:
+            imprimir(Diccionario);
+            break;
+        case 2:
+            printf("Nombre: ");
+            scanf("%s", nuevaEntidad.nom);
+
+            // Validar duplicados (ignorando mayúsculas/minúsculas)
+            rewind(Diccionario);
+            int duplicado = 0;
+            long dir = 0;
+            Entidades temp;
+            fread(&dir, sizeof(long), 1, Diccionario);
+            while (dir != vacio) {
+                fseek(Diccionario, dir, SEEK_SET);
+                fread(temp.nom, N, 1, Diccionario);
+                fread(&temp.listDatos, sizeof(long), 1, Diccionario);
+                fread(&temp.ListAtrubutos, sizeof(long), 1, Diccionario);
+                fread(&temp.sig, sizeof(long), 1, Diccionario); // <-- Lee el sig real
+                if (strcasecmp(temp.nom, nuevaEntidad.nom) == 0) {
+                    duplicado = 1;
+                    break;
+                }
+                dir = temp.sig; // <-- Avanza al siguiente registro
+            }
+            if (duplicado) {
+                printf("Ya existe una entidad con ese nombre (sin distinguir mayúsculas/minúsculas).\n");
+                break;
+            }
+
+            nuevaEntidad.sig = vacio;
+            nuevaEntidad.listDatos = vacio;
+            nuevaEntidad.ListAtrubutos = vacio;
+            DirEntidad = AgregarEntidad(Diccionario, nuevaEntidad);
+            OrdenarEntidad(Diccionario, 0, nuevaEntidad.nom, DirEntidad);
+            break;
+        case 3:
+            printf("Nombre: ");
+            scanf("%s", nom);
+            if (elimina(Diccionario, nom))
+                printf("Eliminado correctamente!\n");
+            else
+                printf("No fue posible eliminar, favor de volver a intentar\n");
+            break;
+        case 4:
+            printf("Nombre: ");
+            scanf("%s", nom);
+            modificarEntidad(Diccionario, nom);
+            break;
+        case 5:
+            rewind(Diccionario);
+            printf("Nombre de la Entidad: ");
+            scanf("%s", nom);
+            entidad = findEntity(Diccionario, nom);
+            if (entidad.sig == 0)
+            {
+                printf("No se encontro La entidad!, favor de revisar.\n");
+                break;
+            }
+            fseek(Diccionario, entidad.listDatos, SEEK_SET);
+            fread(&DirEntidad, sizeof(long), 1, Diccionario);
+            if (DirEntidad != vacio)
+            {
+                printf("Ya hay datos en esta entidad, no puedes modificar ni agregar mas atributos.\n");
+                break;
+            }
+            printf("Entrando a los Atributos de la Entidad...........\n\n");
+            fclose(Diccionario);
+            menuAtributos(diccionario, entidad);
+            return;
+        case 6:
+            rewind(Diccionario);
+            printf("Nombre de la Entidad a la que se le quiere insertar los datos: ");
+            scanf("%s", nom);
+            entidad = findEntity(Diccionario, nom);
+            if (entidad.sig == 0)
+            {
+                printf("No se encontro La entidad!, favor de revisar.\n");
+                break;
+            }
+            insertarDatos(Diccionario, entidad);
+            break;
+        case 0:
+            fclose(Diccionario);
+            printf("Saliendo del Archivo...................\n\n");
+            menu();
+            return;
+        default:
+            printf("Opcion no valida, favor de volver a intentar.\n");
+            break;
+        }
+        fclose(Diccionario);
+    } while (ops != 0);
 }
 
 int main()
